@@ -1,74 +1,696 @@
-<!DOCTYPE html>
-<html lang="bn">
-<head>
-    <meta charset="UTF-8">
-    <title>Daily Mini Income - Pro</title>
-    <style>
-        body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
-        .page { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .hidden { display: none; }
-        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        button { padding: 10px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    <style>
-    body { font-family: sans-serif; background-color: #121212; color: white; margin: 0; padding: 20px; }
-    .page { background: #1e1e1e; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-    input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; background: #333; color: white; }
-    button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-    
-    /* গ্রিড বাটন স্টাইল */
-    .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-    .btn-grid button { background: #333; border: 1px solid #444; height: 80px; }
-    
-    .hidden { display: none; }
-</style>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-</head>
-<body>
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Video,
+  Globe,
+  Lock,
+  Compass,
+  Award,
+  BookOpen,
+  Play,
+  CheckCircle2,
+  AlertTriangle,
+  RotateCw,
+  RefreshCw
+} from "lucide-react";
+import { UserProfile, AdminSettings } from "../types";
+import { quizQuestions } from "../data/mockData";
 
-    <div id="login-section" class="page">
-        <h2>Daily Mini Income</h2>
-        <input type="text" id="username" placeholder="আপনার নাম লিখুন">
-        <button onclick="initApp()">শুরু করুন</button>
-    </div>
+interface TaskMissionsProps {
+  user: UserProfile;
+  adminSettings: AdminSettings;
+  onRewardPoints: (points: number, reason: string) => void;
+  onCommitViolation: () => void;
+  onUpdateUserFields: (fields: Partial<UserProfile>) => void;
+  lang: "BN" | "EN";
+  t: any;
+}
 
-    <div id="dashboard-section" class="page hidden">
-        <h2>স্বাগতম, <span id="user-display"></span>!</h2>
-        <p>ব্যালেন্স: <span id="balance">০</span> টাকা</p>
+export const TaskMissions: React.FC<TaskMissionsProps> = ({
+  user,
+  adminSettings,
+  onRewardPoints,
+  onCommitViolation,
+  onUpdateUserFields,
+  lang,
+  t,
+}) => {
+  const [activeTaskTab, setActiveTaskTab] = useState<"Video" | "Web" | "Captcha" | "Spin" | "Scratch" | "Quiz">("Video");
+
+  // States
+  const [videoTimer, setVideoTimer] = useState<number | null>(null);
+  const [videoState, setVideoState] = useState<"idle" | "playing" | "completed" | "cooldown">("idle");
+  const [videoCooldownSecs, setVideoCooldownSecs] = useState<number>(0);
+  const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const videoSecondsRef = useRef<number>(15);
+
+  const [webTimer, setWebTimer] = useState<number | null>(null);
+  const [webState, setWebState] = useState<"idle" | "visiting" | "completed">("idle");
+  const [currentSelectedUrl, setCurrentSelectedUrl] = useState("https://earnings-merchant.com/special-rewards");
+  const webIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const webSecondsRef = useRef<number>(30);
+
+  const [captchaCode, setCaptchaCode] = useState("");
+  const [captchaInput, setCaptchaInput] = useState("");
+  const [captchaWrongCount, setCaptchaWrongCount] = useState(0);
+  const [captchaLockTimer, setCaptchaLockTimer] = useState<number>(0);
+
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [spinResultAngle, setSpinResultAngle] = useState(0);
+  const [spinWinPoints, setSpinWinPoints] = useState<number | null>(null);
+
+  const [scratchRevealed, setScratchRevealed] = useState(false);
+  const [scratchedPercentage, setScratchedPercentage] = useState(0);
+  const [scratchPointsPool, setScratchPointsPool] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef(false);
+
+  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
+  const [selectedQuizOption, setSelectedQuizOption] = useState<number | null>(null);
+  const [quizScore, setQuizScore] = useState(0);
+  const [quizCompleted, setQuizCompleted] = useState(false);
+
+  // SECURITY: Tab switching checker
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (videoState === "playing") {
+          cleanupVideo();
+          setVideoState("idle");
+          onCommitViolation();
+          alert(lang === "BN" 
+            ? "ট্যাব পরিবর্তন করার কারণে আপনার ভিডিও মিশনটি বাতিল করা হয়েছে এবং অ্যাকাউন্ট পেনাল্টি যুক্ত হয়েছে!" 
+            : "Switching tabs paused your video. Points canceled!"
+          );
+        }
+        if (webState === "visiting") {
+          cleanupWeb();
+          setWebState("idle");
+          onCommitViolation();
+          alert(lang === "BN"
+            ? "ব্রাউজার মিনিমাইজ বা ট্যাব পরিবর্তনের কারণে আপনার ওয়েবসাইট ভিজিট মিশনটি বাতিল করা হয়েছে!"
+            : "Leaving browsing window cancelled the visit mission!"
+          );
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [videoState, webState, lang]);
+
+  // CAPTCHA security lock timer
+  const captchaLockExpiry = user.captchaLockedUntil;
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (captchaLockExpiry > Date.now()) {
+      const remaining = Math.max(0, Math.ceil((captchaLockExpiry - Date.now()) / 1000));
+      setCaptchaLockTimer(remaining);
+      
+      timer = setInterval(() => {
+        const rem = Math.max(0, Math.ceil((captchaLockExpiry - Date.now()) / 1000));
+        setCaptchaLockTimer(rem);
+        if (rem === 0) {
+          clearInterval(timer);
+          onUpdateUserFields({ failedCaptchaAttempts: 0, captchaLockedUntil: 0 });
+        }
+      }, 1000);
+    } else {
+      setCaptchaLockTimer(0);
+    }
+    return () => clearInterval(timer);
+  }, [captchaLockExpiry]);
+
+  // Video Cooldown
+  useEffect(() => {
+    if (videoCooldownSecs > 0) {
+      const timer = setTimeout(() => {
+        setVideoCooldownSecs((prev) => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (videoState === "cooldown" && videoCooldownSecs === 0) {
+      setVideoState("idle");
+    }
+  }, [videoCooldownSecs, videoState]);
+
+  // Actions
+  const handleStartVideo = () => {
+    if (user.videoCountToday >= 10) {
+      alert(lang === "BN" ? "আজকের ১০টি ভিডিও দেখার সীমা শেষ!" : "Today's video views exceeded!");
+      return;
+    }
+    if (videoState === "cooldown") return;
+
+    setVideoState("playing");
+    setVideoTimer(15);
+    videoSecondsRef.current = 15;
+
+    videoIntervalRef.current = setInterval(() => {
+      videoSecondsRef.current -= 1;
+      setVideoTimer(videoSecondsRef.current);
+      if (videoSecondsRef.current <= 0) {
+        cleanupVideo();
+        setVideoState("completed");
+        onRewardPoints(10, lang === "BN" ? "ভিডিও মিশন কমপ্লিট" : "Completed Video Mission");
         
-        <h3>আপনার আজকের কাজসমূহ (১-১০):</h3>
-        <div class="btn-grid" id="features-list">
-            <button onclick="taskAction(1)">কাজ ১</button>
-            <button onclick="taskAction(2)">কাজ ২</button>
-            <button onclick="taskAction(3)">কাজ ৩</button>
-            <button onclick="taskAction(4)">কাজ ৪</button>
-            <button onclick="taskAction(5)">কাজ ৫</button>
-            <button onclick="taskAction(6)">কাজ ৬</button>
-            <button onclick="taskAction(7)">কাজ ৭</button>
-            <button onclick="taskAction(8)">কাজ ৮</button>
-            <button onclick="taskAction(9)">কাজ ৯</button>
-            <button onclick="taskAction(10)">কাজ ১০</button>
-        </div>
+        const count = user.videoCountToday + 1;
+        if (count >= 10) {
+          setVideoState("cooldown");
+          setVideoCooldownSecs(60); 
+        } else {
+          onUpdateUserFields({ videoCountToday: count, lastVideoDate: new Date().toISOString().substring(0, 10) });
+          setTimeout(() => {
+            setVideoState("idle");
+          }, 2000);
+        }
+      }
+    }, 1000);
+  };
+
+  const cleanupVideo = () => {
+    if (videoIntervalRef.current) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
+    setVideoTimer(null);
+  };
+
+  const handleStartWebVisit = () => {
+    if (user.websiteVisitsToday >= 10) {
+      alert(t.websiteVisitLimit);
+      return;
+    }
+
+    setWebState("visiting");
+    setWebTimer(30);
+    webSecondsRef.current = 30;
+
+    webIntervalRef.current = setInterval(() => {
+      webSecondsRef.current -= 1;
+      setWebTimer(webSecondsRef.current);
+      if (webSecondsRef.current <= 0) {
+        cleanupWeb();
+        setWebState("completed");
+        onRewardPoints(20, lang === "BN" ? "ওয়েবসাইট ভিজিট সম্পন্ন" : "Completed web visit quest");
+        
+        const count = user.websiteVisitsToday + 1;
+        onUpdateUserFields({
+          websiteVisitsToday: count,
+          lastVisitDate: new Date().toISOString().substring(0, 10),
+        });
+
+        setTimeout(() => {
+          setWebState("idle");
+        }, 3000);
+      }
+    }, 1000);
+  };
+
+  const handleEarlyBackWeb = () => {
+    cleanupWeb();
+    setWebState("idle");
+    onCommitViolation();
+    alert(lang === "BN" ? "আপনি ৩০ সেকেন্ডের আগেই ব্যাক করেছেন! পয়েন্ট বাতিল হয়েছে।" : "You backed out early! Quest failed.");
+  };
+
+  const cleanupWeb = () => {
+    if (webIntervalRef.current) {
+      clearInterval(webIntervalRef.current);
+      webIntervalRef.current = null;
+    }
+    setWebTimer(null);
+  };
+
+  const generateCaptcha = () => {
+    const list = "1234567890ABCDEFGHJKMNPQRSTWXYZ";
+    let code = "";
+    for (let i = 0; i < 4; i++) {
+      code += list.charAt(Math.floor(Math.random() * list.length));
+    }
+    setCaptchaCode(code);
+    setCaptchaInput("");
+  };
+
+  useEffect(() => {
+    generateCaptcha();
+  }, [activeTaskTab]);
+
+  const handleSubmitCaptcha = () => {
+    if (captchaInput.toUpperCase() === captchaCode) {
+      onRewardPoints(5, lang === "BN" ? "নিরাপত্তা ক্যাপচা সমাধান" : "Solved security captcha");
+      alert(t.captchaCompleted);
+      setCaptchaWrongCount(0);
+      generateCaptcha();
+    } else {
+      const wrongs = captchaWrongCount + 1;
+      setCaptchaWrongCount(wrongs);
+      if (wrongs >= 3) {
+        const expiry = Date.now() + 15 * 60 * 1000;
+        onUpdateUserFields({ failedCaptchaAttempts: wrongs, captchaLockedUntil: expiry });
+        alert(t.captchaLocked);
+      } else {
+        alert(lang === "BN" ? `উদ্বেগজনক ক্যাপচা! প্রচেষ্টা বাকি ${3 - wrongs} বার` : `Invalid match! attempts left: ${3 - wrongs}`);
+      }
+    }
+  };
+
+  const handleSpinWheel = () => {
+    if (user.spinCountToday >= 10) {
+      alert(lang === "BN" ? "আজকের ১০ বার স্পিন খেলার সুযোগ শেষ!" : "Lucky Spin count exceeded!");
+      return;
+    }
+    if (isSpinning) return;
+
+    setIsSpinning(true);
+    setSpinWinPoints(null);
+
+    const extraRotations = 1800 + Math.floor(Math.random() * 360);
+    setSpinResultAngle((prev) => prev + extraRotations);
+
+    setTimeout(() => {
+      setIsSpinning(false);
+      const pointsArray = [5, 10, 50, 0, 15, 20, 100, 2];
+      const winIdx = Math.floor(Math.random() * pointsArray.length);
+      const winPoints = pointsArray[winIdx];
+      setSpinWinPoints(winPoints);
+
+      if (winPoints > 0) {
+        onRewardPoints(winPoints, lang === "BN" ? "লাকি স্পিন পুরষ্কার" : "Lucky spin reward");
+      }
+      
+      const count = user.spinCountToday + 1;
+      onUpdateUserFields({ spinCountToday: count, lastSpinDate: new Date().toISOString().substring(0, 10) });
+    }, 3500);
+  };
+
+  const initializeScratchCard = () => {
+    setScratchRevealed(false);
+    setScratchedPercentage(0);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#A1A1AA";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = 'bold 13px "Inter", sans-serif';
+        ctx.textAlign = "center";
+        ctx.fillText(lang === "BN" ? "এখানে ঘষুন" : "SCRATCH CARD HERE", canvas.width / 2, canvas.height / 2);
+      }
+    }
+    setScratchPointsPool(5 + Math.floor(Math.random() * 45));
+  };
+
+  useEffect(() => {
+    if (activeTaskTab === "Scratch") {
+      setTimeout(initializeScratchCard, 100);
+    }
+  }, [activeTaskTab]);
+
+  const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if ("touches" in e) {
+      if (e.touches.length === 0) return { x: 0, y: 0 };
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top,
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+  };
+
+  const handleScratchStart = (e: React.MouseEvent | React.TouchEvent) => {
+    isDrawingRef.current = true;
+    handleScratchDraw(e);
+  };
+
+  const handleScratchEnd = () => {
+    isDrawingRef.current = false;
+    calculateScratchedRatio();
+  };
+
+  const handleScratchDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawingRef.current || scratchRevealed) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const { x, y } = getCoordinates(e);
+
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.arc(x, y, 16, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  const calculateScratchedRatio = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    try {
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let clearPixels = 0;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        if (imgData.data[i + 3] === 0) {
+          clearPixels++;
+        }
+      }
+      const totalPixels = canvas.width * canvas.height;
+      const ratio = Math.round((clearPixels / totalPixels) * 100);
+      setScratchedPercentage(ratio);
+
+      if (ratio > 50 && !scratchRevealed) {
+        setScratchRevealed(true);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        onRewardPoints(scratchPointsPool, lang === "BN" ? "স্ক্র্যাচ কার্ড পুরষ্কার" : "Scratch card reward");
+      }
+    } catch (err) {
+      console.warn("Touch bypass: ", err);
+    }
+  };
+
+  const handleAnswerQuiz = (optionIdx: number) => {
+    if (selectedQuizOption !== null) return;
+    setSelectedQuizOption(optionIdx);
+
+    const isCorrect = optionIdx === quizQuestions[currentQuizIndex].correctIndex;
+    if (isCorrect) {
+      setQuizScore((prev) => prev + 1);
+    }
+  };
+
+  const handleNextQuiz = () => {
+    setSelectedQuizOption(null);
+    if (currentQuizIndex < quizQuestions.length - 1) {
+      setCurrentQuizIndex((prev) => prev + 1);
+    } else {
+      setQuizCompleted(true);
+      const pointsWon = quizScore * 5;
+      if (pointsWon > 0) {
+        onRewardPoints(pointsWon, lang === "BN" ? "কুইজ পুরষ্কার" : "Completed Trivia Quiz");
+      }
+    }
+  };
+
+  const resetQuiz = () => {
+    setCurrentQuizIndex(0);
+    setSelectedQuizOption(null);
+    setQuizScore(0);
+    setQuizCompleted(false);
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6" id="quest_hub_container">
+      {/* Tab bar */}
+      <div className="md:col-span-3 bg-zinc-50 dark:bg-zinc-950 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-900 space-y-2 flex flex-row md:flex-col overflow-x-auto gap-2 md:gap-0" id="quest_sidebar">
+        {[
+          { key: "Video", label: t.videoMissionTitle, icon: Video },
+          { key: "Web", label: t.webVisitTitle, icon: Globe },
+          { key: "Captcha", label: t.captchaTitle, icon: Lock },
+          { key: "Spin", label: t.luckySpin, icon: Compass },
+          { key: "Scratch", label: t.scratchCard, icon: Award },
+          { key: "Quiz", label: t.quizTitle, icon: BookOpen },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTaskTab(tab.key as any)}
+              className={`w-full text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all whitespace-nowrap md:whitespace-normal cursor-pointer text-xs ${
+                activeTaskTab === tab.key
+                  ? "bg-zinc-900 dark:bg-indigo-600 text-white"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-150 dark:hover:bg-zinc-900"
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Main Container */}
+      <div className="md:col-span-9 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[460px]">
+        {/* Video */}
+        {activeTaskTab === "Video" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-150 flex items-center gap-2">
+                <Video className="w-5 h-5 text-indigo-600" />
+                <span>{t.videoMissionTitle}</span>
+              </h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t.videoInstruction}</p>
+            </div>
+
+            <div className="relative aspect-video rounded-xl bg-zinc-900 overflow-hidden border border-zinc-805 flex flex-col items-center justify-center text-center p-4">
+              {videoState === "playing" ? (
+                <>
+                  <div className="w-16 h-16 bg-white/10 backdrop-blur rounded-full flex items-center justify-center animate-ping text-white mb-4">
+                    <Play className="w-8 h-8 fill-white" />
+                  </div>
+                  <span className="text-white text-sm font-black font-mono">
+                    {t.timerWaiting.replace("{time}", String(videoTimer))}
+                  </span>
+                </>
+              ) : videoState === "completed" ? (
+                <div className="space-y-2">
+                  <CheckCircle2 className="w-16 h-16 text-emerald-505 mx-auto" />
+                  <p className="text-white text-base font-extrabold">{t.videoCompleted}</p>
+                </div>
+              ) : videoState === "cooldown" ? (
+                <div className="space-y-2">
+                  <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto" />
+                  <p className="text-white text-sm font-bold">{t.videoCooldown.replace("{time}", String(videoCooldownSecs))}</p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStartVideo}
+                  className="px-6 py-3 bg-indigo-650 text-white hover:opacity-90 transition-all text-xs font-black rounded-full cursor-pointer flex items-center gap-2"
+                >
+                  <Play className="w-4 h-4 fill-white" />
+                  <span>{t.startVideo}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-zinc-500 bg-zinc-50 dark:bg-zinc-950 p-4.5 rounded-xl border">
+              <span>{t.videoProgress.replace("{count}", String(user.videoCountToday))}</span>
+              <div className="w-40 bg-zinc-200 dark:bg-zinc-800 rounded-full h-2">
+                <div className="bg-indigo-605 h-2 rounded-full" style={{ width: `${(user.videoCountToday / 10) * 100}%` }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Web Visit */}
+        {activeTaskTab === "Web" && (
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-150 flex items-center gap-2">
+                <Globe className="w-5 h-5 text-indigo-600" />
+                <span>{t.webVisitTitle}</span>
+              </h2>
+              <p className="text-xs text-zinc-550 dark:text-zinc-400 mt-1">{t.webVisitInstruction}</p>
+            </div>
+
+            {webState === "visiting" ? (
+              <div className="p-4 border border-zinc-200 dark:border-zinc-850 rounded-xl space-y-4 bg-zinc-50 dark:bg-zinc-950">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <span className="text-xs font-mono px-3 py-1 bg-white dark:bg-zinc-900 border rounded flex-1 text-center max-w-sm mx-4">
+                    {currentSelectedUrl}
+                  </span>
+                  <div className="text-xs font-black text-indigo-600 font-mono">{webTimer}s</div>
+                </div>
+                <div className="p-6 bg-white dark:bg-zinc-900 rounded-lg min-h-[160px] flex flex-col justify-between">
+                  <p className="text-xs text-zinc-550">
+                    সহজ কাজ করার স্পন্সরড ওয়েবসাইটে আপনাদের স্বাগত। আর্টিকেলটি অন্তত ৩০ সেকেন্ড স্ক্রোল করুন। ৩০ সেকেন্ড শেষ হলে ব্যালেন্স বোনাস এড হবে।
+                  </p>
+                  <button onClick={handleEarlyBackWeb} className="self-start text-[11px] text-rose-600 hover:underline">
+                    ← ব্যাক বাটনে ক্লিক (Points cancel)
+                  </button>
+                </div>
+              </div>
+            ) : webState === "completed" ? (
+              <div className="p-12 border border-emerald-200 rounded-xl text-center space-y-3 bg-emerald-50/50">
+                <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
+                <p className="text-sm font-bold text-emerald-800">{t.visitCompleted}</p>
+              </div>
+            ) : (
+              <div className="p-8 border-2 border-dashed border-zinc-200 rounded-xl text-center space-y-4">
+                <Globe className="w-12 h-12 text-zinc-300 mx-auto" />
+                <button onClick={handleStartWebVisit} className="px-5 py-2.5 bg-indigo-650 text-white font-extrabold text-xs rounded-xl cursor-pointer">
+                  {t.startVisit}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Captcha */}
+        {activeTaskTab === "Captcha" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-150 flex items-center gap-2">
+                <Lock className="w-5 h-5 text-indigo-606" />
+                <span>{t.captchaTitle}</span>
+              </h2>
+              <p className="text-xs text-zinc-500 mt-1">{t.captchaInstruction}</p>
+            </div>
+
+            {captchaLockTimer > 0 ? (
+              <div className="p-6 border border-rose-200 rounded-xl bg-rose-50/30 text-center space-y-3">
+                <Lock className="w-12 h-12 text-rose-500 mx-auto animate-pulse" />
+                <h3 className="text-sm font-bold text-rose-800">{t.captchaLocked}</h3>
+                <p className="text-xs text-rose-500 font-mono">পুনরায় করুন: {Math.floor(captchaLockTimer / 60)}মি. {captchaLockTimer % 60}সে.</p>
+              </div>
+            ) : (
+              <div className="space-y-4 max-w-sm mx-auto">
+                <div className="p-6 bg-zinc-100 dark:bg-zinc-950 rounded-2xl text-center border font-mono tracking-[12px] text-3xl font-black">
+                  {captchaCode}
+                </div>
+                <input
+                  type="text"
+                  value={captchaInput}
+                  onChange={(e) => setCaptchaInput(e.target.value)}
+                  placeholder="কোডটি এখানে ক্যাপিটাল লেটারে টাইপ করুন"
+                  className="w-full px-4 py-3 rounded-xl border text-center font-mono font-bold tracking-[8px] uppercase outline-none focus:border-indigo-500"
+                />
+                <div className="flex gap-2">
+                  <button onClick={handleSubmitCaptcha} className="flex-1 py-3 bg-zinc-900 dark:bg-indigo-600 text-white rounded-xl font-bold text-xs cursor-pointer">
+                    {t.submitCaptcha}
+                  </button>
+                  <button onClick={generateCaptcha} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl cursor-pointer">
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Spin Wheel */}
+        {activeTaskTab === "Spin" && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-150 flex items-center gap-2">
+              <Compass className="w-5 h-5 text-indigo-600" />
+              <span>{t.luckySpin}</span>
+            </h2>
+
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative w-48 h-48 md:w-56 md:h-56">
+                <div className="absolute top-[-8px] left-1/2 -translate-x-1/2 w-4 h-6 bg-red-600 clip-triangle z-10" />
+                <div
+                  className="w-full h-full rounded-full border-4 border-zinc-850 overflow-hidden relative shadow"
+                  style={{
+                    transform: `rotate(${spinResultAngle}deg)`,
+                    transition: isSpinning ? "transform 3.5s cubic-bezier(0.2, 0.8, 0.2, 1)" : "none",
+                  }}
+                >
+                  <div className="absolute inset-0 bg-[conic-gradient(from_0deg,#240046_0deg_45deg,#5a189a_45deg_90deg,#9d4edd_90deg_135deg,#c77dff_135deg_180deg,#bd93f9_270deg,#ff5555_315deg)]" />
+                </div>
+              </div>
+              <button disabled={isSpinning || user.spinCountToday >= 10} onClick={handleSpinWheel} className="mt-6 px-6 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-full cursor-pointer">
+                {isSpinning ? "স্পিন হচ্ছে..." : "স্পিন করুন"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Scratch Card */}
+        {activeTaskTab === "Scratch" && (
+          <div className="space-y-5">
+            <h2 className="text-xl font-extrabold flex items-center gap-2">
+              <Award className="w-5 h-5 text-indigo-605" />
+              <span>{t.scratchCard}</span>
+            </h2>
+
+            <div className="flex flex-col items-center justify-center min-h-[220px]">
+              <div className="relative border-4 border-dashed rounded-2xl overflow-hidden shadow">
+                <div className="w-64 h-32 bg-indigo-50 dark:bg-indigo-950/20 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-black text-indigo-600">+{scratchPointsPool} PTS</span>
+                </div>
+                <canvas
+                  ref={canvasRef}
+                  width={256}
+                  height={128}
+                  onMouseDown={handleScratchStart}
+                  onMouseUp={handleScratchEnd}
+                  onMouseLeave={handleScratchEnd}
+                  onMouseMove={handleScratchDraw}
+                  onTouchStart={handleScratchStart}
+                  onTouchEnd={handleScratchEnd}
+                  onTouchMove={handleScratchDraw}
+                  className="absolute inset-0 cursor-crosshair z-10 touch-none"
+                />
+              </div>
+              {scratchRevealed && (
+                <button onClick={initializeScratchCard} className="mt-4 px-4 py-1.5 bg-zinc-100 hover:text-indigo-500 font-bold text-xs rounded-xl cursor-pointer">
+                  নতুন স্ক্র্যাচ নিন (Get new card)
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Quiz */}
+        {activeTaskTab === "Quiz" && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-extrabold flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-indigo-600" />
+              <span>{t.quizTitle}</span>
+            </h2>
+
+            {quizCompleted ? (
+              <div className="p-8 border rounded-xl text-center space-y-4">
+                <h3 className="font-extrabold text-sm">কুইজ সম্পন্ন হয়েছে!</h3>
+                <p className="text-xs text-zinc-500">৫টির মধ্যে সঠিক উত্তর হয়েছে: {quizScore} টি।</p>
+                <button onClick={resetQuiz} className="px-5 py-2 bg-indigo-650 text-white text-xs font-bold rounded-xl cursor-pointer">
+                  পুনরায় খেলুন
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-4.5 bg-zinc-50 dark:bg-zinc-950 border rounded-xl">
+                  <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100">
+                    {lang === "BN" ? quizQuestions[currentQuizIndex].questionBn : quizQuestions[currentQuizIndex].questionEn}
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(lang === "BN" ? quizQuestions[currentQuizIndex].optionsBn : quizQuestions[currentQuizIndex].optionsEn).map((option, idx) => (
+                    <button
+                      key={idx}
+                      disabled={selectedQuizOption !== null}
+                      onClick={() => handleAnswerQuiz(idx)}
+                      className="p-3 rounded-xl border text-left text-xs hover:bg-zinc-50 cursor-pointer"
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                {selectedQuizOption !== null && (
+                  <button onClick={handleNextQuiz} className="px-5 py-2.5 bg-zinc-900 text-white font-bold text-xs rounded-xl cursor-pointer">
+                    পরবর্তী প্রশ্ন →
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
-
-    <script>
-        function initApp() {
-            let name = document.getElementById('username').value;
-            if(name) {
-                document.getElementById('user-display').innerText = name;
-                document.getElementById('login-section').classList.add('hidden');
-                document.getElementById('dashboard-section').classList.remove('hidden');
-            } else {
-                alert('নাম লিখুন');
-            }
-        }
-
-        function taskAction(id) {
-            // ১০টি ফিচারের লজিক
-            alert('কাজ নং ' + id + ' সম্পন্ন হয়েছে! ১০ টাকা যোগ করা হলো।');
-            let balanceEl = document.getElementById('balance');
-            let currentBalance = parseInt(balanceEl.innerText);
-            balanceEl.innerText = currentBalance + 10;
-        }
-    </script>
-</body>
-</html>
+  );
+};
