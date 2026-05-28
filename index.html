@@ -1,44 +1,49 @@
-<!DOCTYPE html>
+লজিক<!DOCTYPE html>
 <html lang="bn">
 <head>
     <meta charset="UTF-8">
-    <title>Daily Mini Income</title>
+    <title>Daily Mini Income - Pro</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f4f4; margin: 0; }
-        .page { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); animation: fadeIn 1s ease-in; text-align: center; width: 80%; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-        input { display: block; width: 90%; padding: 10px; margin: 10px auto; border: 1px solid #ccc; border-radius: 5px; }
-        button { width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+        .page { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .hidden { display: none; }
+        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <!-- লগইন পেজ (পাসওয়ার্ড ছাড়া) -->
-    <div id="login-page" class="page">
+    <!-- ১. লগইন সেকশন -->
+    <div id="login-section" class="page">
         <h2>Daily Mini Income</h2>
-        <p>আপনার নাম দিয়ে অ্যাপটি শুরু করুন</p>
-        <input type="text" id="username" placeholder="আপনার নাম লিখুন">
-        <button onclick="goToDashboard()">শুরু করুন</button>
+        <input type="text" id="username" placeholder="নাম লিখুন">
+        <button onclick="initApp()">শুরু করুন</button>
     </div>
 
-    <!-- ইউজার ড্যাশবোর্ড -->
-    <div id="dashboard" class="page hidden">
-        <h2>স্বাগতম, <span id="display-name"></span>!</h2>
-        <p>আপনার বর্তমান আয়: <b>৫০ টাকা</b></p>
-        <button style="background-color: #007bff;">আজকের কাজ শুরু করুন</button>
+    <!-- ২. মূল ড্যাশবোর্ড (৯১টি ফিচারের মূল জায়গা) -->
+    <div id="dashboard-section" class="page hidden">
+        <h2>স্বাগতম, <span id="user-display"></span>!</h2>
+        <p>ব্যালেন্স: <span id="balance">০</span> টাকা</p>
+        <div id="features-list">
+            <!-- এখানে ৯১টি ফিচারের বাটন/অপশন পর্যায়ক্রমে আসবে -->
+            <button onclick="startTask()">আজকের কাজ শুরু করুন</button>
+        </div>
     </div>
 
     <script>
-        function goToDashboard() {
-            var name = document.getElementById('username').value;
+        function initApp() {
+            let name = document.getElementById('username').value;
             if(name) {
-                document.getElementById('display-name').innerText = name;
-                document.getElementById('login-page').classList.add('hidden');
-                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('user-display').innerText = name;
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('dashboard-section').classList.remove('hidden');
             } else {
-                alert('অনুগ্রহ করে আপনার নাম লিখুন');
+                alert('নাম লিখুন');
             }
+        }
+
+        function startTask() {
+            // ৯১টি ফিচারের লজিক এখানে যুক্ত হবে
+            alert('ফিচারগুলো লোড হচ্ছে...');
         }
     </script>
 </body>
