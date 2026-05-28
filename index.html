@@ -5,23 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Mini Income - Pro</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .container { width: 90%; max-width: 400px; background: #1e1e1e; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; }
-        h1 { margin-bottom: 20px; color: #28a745; }
-        button { width: 100%; padding: 15px; margin-top: 15px; background: #28a745; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.3s; }
-        button:hover { background: #218838; transform: scale(1.02); }
+        body { font-family: sans-serif; background: #121212; color: white; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { width: 90%; max-width: 400px; background: #1e1e1e; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: center; }
+        h1 { color: #28a745; margin-bottom: 10px; }
+        p { color: #ccc; margin-bottom: 25px; }
+        .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; background: #28a745; color: white; text-decoration: none; border-radius: 10px; font-weight: bold; border: none; cursor: pointer; transition: 0.3s; }
+        .btn:hover { background: #218838; }
     </style>
 </head>
 <body>
+
     <div class="container">
         <h1>Daily Mini Income</h1>
         <p>আপনার প্রোজেক্ট সফলভাবে লাইভ হয়েছে!</p>
-        <button onclick="alert('ভিডিও মিশন চালু হচ্ছে...')">ভিডিও মিশন</button>
-        <button onclick="alert('ক্যাপচা মিশন চালু হচ্ছে...')">ক্যাপচা সমাধান</button>
-        <button onclick="alert('স্পিন চালু হচ্ছে...')">লাকি স্পিন</button>
+        
+        <button class="btn" onclick="location.href='video.html'">ভিডিও মিশন</button>
+        <button class="btn" onclick="location.href='captcha.html'">ক্যাপচা সমাধান</button>
+        <button class="btn" onclick="location.href='spin.html'">লাকি স্পিন</button>
     </div>
-    <script>
-        console.log("App Loaded Successfully!");
-    </script>
+
 </body>
 </html>
