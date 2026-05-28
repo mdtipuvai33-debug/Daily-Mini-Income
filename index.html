@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* এখানে এনিমেশনের কোড */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .welcome-text {
+            animation: fadeIn 3s ease-in;
+            text-align: center;
+            margin-top: 50px;
+            font-family: Arial, sans-serif;
+        }
+        button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="welcome-text">
+        <h1>স্বাগতম!</h1>
+        <p>আপনার Daily Mini Income অ্যাপে স্বাগতম। আজই আয় শুরু করুন।</p>
+        <button onclick="alert('লগইন পেজে স্বাগতম!')">লগইন করুন</button>
+    </div>
+</body>
+</html>
